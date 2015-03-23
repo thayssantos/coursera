@@ -5,19 +5,22 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import com.coursera.lab.dailyselfie.ThumbnailsListFragment.ListSelectionListener;
-
 import android.app.Activity;
+import android.app.AlarmManager;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+
+import com.coursera.lab.dailyselfie.ThumbnailsListFragment.ListSelectionListener;
 
 public class DailySelfieActivity extends Activity {
 
@@ -28,6 +31,10 @@ public class DailySelfieActivity extends Activity {
 	static final int REQUEST_IMAGE_CAPTURE = 1;
 	private String mCurrentPhotoPath;
 	private String PREFIX = "COURSERA_JPEG_";
+	private AlarmManager mAlarmManager;
+	private Intent mNotificationReceiverIntent = null;
+	private PendingIntent mNotificationReceiverPendingIntent = null;
+	private static final long ALARM_INTERVAL = 2 * 60 * 1000L;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -71,7 +78,8 @@ public class DailySelfieActivity extends Activity {
 			if (photoFile != null) {
 				takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT,
 						Uri.fromFile(photoFile));
-				takePictureIntent.putExtra("android.intent.extras.CAMERA_FACING", 1);
+				takePictureIntent.putExtra(
+						"android.intent.extras.CAMERA_FACING", 1);
 				startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
 				addPicToGallery();
 			}
@@ -100,6 +108,9 @@ public class DailySelfieActivity extends Activity {
 	}
 
 	private void initialize() {
+
+		mAlarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+		stopAlarm();
 		mListFragment = new ThumbnailsListFragment();
 		mFragmentManager = getFragmentManager();
 		FragmentTransaction fragmentTransaction = mFragmentManager
@@ -114,6 +125,42 @@ public class DailySelfieActivity extends Activity {
 				displayPhotoFragment(index);
 			}
 		};
+	}
+
+	private void stopAlarm() {
+		if (mNotificationReceiverPendingIntent == null) {
+			mNotificationReceiverIntent = new Intent(DailySelfieActivity.this,
+					AlarmBroadcastReceiver.class);
+
+			mNotificationReceiverPendingIntent = PendingIntent
+					.getBroadcast(DailySelfieActivity.this, 0,
+							mNotificationReceiverIntent, 0);
+		}
+
+		mAlarmManager.cancel(mNotificationReceiverPendingIntent);
+
+	}
+
+	private void startAlarm() {
+		mAlarmManager.setRepeating(AlarmManager.ELAPSED_REALTIME,
+				SystemClock.elapsedRealtime() + ALARM_INTERVAL, ALARM_INTERVAL,
+				mNotificationReceiverPendingIntent);
+	}
+
+	@Override
+	protected void onStart() {
+
+		super.onStart();
+
+		stopAlarm();
+	}
+
+	@Override
+	protected void onStop() {
+
+		startAlarm();
+
+		super.onStop();
 	}
 
 	private void addPicToGallery() {
@@ -143,7 +190,7 @@ public class DailySelfieActivity extends Activity {
 		mCurrentPhotoPath = "file:" + image.getAbsolutePath();
 		return image;
 	}
-	
+
 	private void displayPhotoFragment(int index) {
 		Log.d("debug", "displayPhotoFragment");
 
